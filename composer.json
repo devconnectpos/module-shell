@@ -2,7 +2,7 @@
 	"name": "connectpos/module-shell",
 	"description": "N/A",
 	"type": "magento2-module",
-	"version": "19.11.04",
+	"version": "19.12.04",
 	"license": [
 		"OSL-3.0",
 		"AFL-3.0"
