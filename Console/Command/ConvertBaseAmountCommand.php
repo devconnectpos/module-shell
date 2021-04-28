@@ -91,7 +91,7 @@ class ConvertBaseAmountCommand extends Command
 
     protected function configure()
     {
-        $this->setName('sm:convert_base_amount')->setDescription('Convert base amount command');
+        $this->setName('cpos:convert_base_amount')->setDescription('Convert base amount command');
     }
     /**
      * {@inheritdoc}
