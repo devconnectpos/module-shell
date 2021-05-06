@@ -6,17 +6,18 @@
  * Time: 10:36
  */
 namespace SM\Shell\Console\Command;
-use Symfony\Component\Console\Command\Command;
-use Symfony\Component\Console\Input\InputInterface;
-use Symfony\Component\Console\Output\OutputInterface;
+
+use Magento\Directory\Model\Currency;
+use Magento\Framework\App\State;
+use Magento\Framework\ObjectManagerInterface;
 use Magento\Sales\Model\OrderFactory;
 use Magento\Sales\Model\ResourceModel\Order\CollectionFactory;
 use Magento\Store\Model\StoreManagerInterface;
-use Magento\Directory\Model\Currency;
-use Magento\Framework\ObjectManagerInterface;
-use Magento\Framework\App\State;
-use SM\Shift\Model\RetailTransactionFactory;
 use SM\Shift\Model\ResourceModel\RetailTransaction\CollectionFactory as RetailCollectionFactory;
+use SM\Shift\Model\RetailTransactionFactory;
+use Symfony\Component\Console\Command\Command;
+use Symfony\Component\Console\Input\InputInterface;
+use Symfony\Component\Console\Output\OutputInterface;
 
 /**
  * Class ConvertBaseAmountCommand
@@ -28,11 +29,6 @@ class ConvertBaseAmountCommand extends Command
      * @var \Magento\Sales\Model\ResourceModel\Order\CollectionFactory
      */
     protected $orderCollectionFactory;
-
-    /**
-     * @var \Magento\Sales\Model\OrderFactory
-     */
-    private $orderFactory;
 
     /**
      * @var \Magento\Store\Model\StoreManagerInterface
@@ -67,17 +63,14 @@ class ConvertBaseAmountCommand extends Command
 
     public function __construct(
         CollectionFactory $collectionFactory,
-        OrderFactory $orderFactory,
         StoreManagerInterface $storeManager,
         ObjectManagerInterface $objectManager,
         State $appState,
         RetailTransactionFactory $retailTransactionFactory,
         RetailCollectionFactory $transactionCollectionFactory,
         Currency $currencyModel
-    )
-    {
+    ) {
         $this->orderCollectionFactory         = $collectionFactory;
-        $this->orderFactory                   = $orderFactory;
         $this->storeManager = $storeManager;
         $this->currencyModel = $currencyModel;
         $this->objectManager           = $objectManager;
@@ -86,7 +79,6 @@ class ConvertBaseAmountCommand extends Command
         $this->appState = $appState;
 
         parent::__construct();
-
     }
 
     protected function configure()
@@ -98,7 +90,11 @@ class ConvertBaseAmountCommand extends Command
      */
     protected function execute(InputInterface $input, OutputInterface $output)
     {
-        $this->appState->setAreaCode('adminhtml');
+        try {
+            $this->appState->getAreaCode();
+        } catch (\Magento\Framework\Exception\LocalizedException $e) {
+            $this->appState->setAreaCode('adminhtml');
+        }
 
         $baseCurrencyCode = $this->storeManager->getStore()->getBaseCurrencyCode();
         $allowedCurrencies = $this->currencyModel->getConfigAllowCurrencies();
@@ -111,10 +107,9 @@ class ConvertBaseAmountCommand extends Command
 
             $transactionCollection->addFieldToFilter('order_id', $order->getId());
             foreach ($transactionCollection as $transaction) {
-                $transaction->setData('base_amount',isset($rates[$orderCurrency]) && $rates[$orderCurrency] != 0 ? $transaction->getData('amount')/$rates[$orderCurrency] : null);
+                $transaction->setData('base_amount', isset($rates[$orderCurrency]) && $rates[$orderCurrency] != 0 ? $transaction->getData('amount')/$rates[$orderCurrency] : null);
                 $transaction->save();
             }
-
         }
     }
 }
