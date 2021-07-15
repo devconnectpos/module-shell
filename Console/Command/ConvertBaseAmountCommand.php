@@ -5,12 +5,13 @@
  * Date: 23/09/2019
  * Time: 10:36
  */
+
 namespace SM\Shell\Console\Command;
 
 use Magento\Directory\Model\Currency;
+use Magento\Framework\App\Area;
 use Magento\Framework\App\State;
 use Magento\Framework\ObjectManagerInterface;
-use Magento\Sales\Model\OrderFactory;
 use Magento\Sales\Model\ResourceModel\Order\CollectionFactory;
 use Magento\Store\Model\StoreManagerInterface;
 use SM\Shift\Model\ResourceModel\RetailTransaction\CollectionFactory as RetailCollectionFactory;
@@ -21,6 +22,7 @@ use Symfony\Component\Console\Output\OutputInterface;
 
 /**
  * Class ConvertBaseAmountCommand
+ *
  * @package SM\Shell\Console\Command
  */
 class ConvertBaseAmountCommand extends Command
@@ -70,10 +72,10 @@ class ConvertBaseAmountCommand extends Command
         RetailCollectionFactory $transactionCollectionFactory,
         Currency $currencyModel
     ) {
-        $this->orderCollectionFactory         = $collectionFactory;
+        $this->orderCollectionFactory = $collectionFactory;
         $this->storeManager = $storeManager;
         $this->currencyModel = $currencyModel;
-        $this->objectManager           = $objectManager;
+        $this->objectManager = $objectManager;
         $this->retailTransactionFactory = $retailTransactionFactory;
         $this->transactionCollectionFactory = $transactionCollectionFactory;
         $this->appState = $appState;
@@ -85,6 +87,7 @@ class ConvertBaseAmountCommand extends Command
     {
         $this->setName('cpos:convert_base_amount')->setDescription('Convert base amount command');
     }
+
     /**
      * {@inheritdoc}
      */
@@ -92,24 +95,29 @@ class ConvertBaseAmountCommand extends Command
     {
         try {
             $this->appState->getAreaCode();
-        } catch (\Magento\Framework\Exception\LocalizedException $e) {
-            $this->appState->setAreaCode('adminhtml');
-        }
+            $this->appState->emulateAreaCode(Area::AREA_ADMINHTML, function () {
+                $baseCurrencyCode = $this->storeManager->getStore()->getBaseCurrencyCode();
+                $allowedCurrencies = $this->currencyModel->getConfigAllowCurrencies();
+                $rates = $this->currencyModel->getCurrencyRates($baseCurrencyCode, array_values($allowedCurrencies));
 
-        $baseCurrencyCode = $this->storeManager->getStore()->getBaseCurrencyCode();
-        $allowedCurrencies = $this->currencyModel->getConfigAllowCurrencies();
-        $rates = $this->currencyModel->getCurrencyRates($baseCurrencyCode, array_values($allowedCurrencies));
+                $orderCollection = $this->orderCollectionFactory->create();
+                foreach ($orderCollection as $order) {
+                    $transactionCollection = $this->transactionCollectionFactory->create();
+                    $orderCurrency = $order->getOrderCurrencyCode();
 
-        $orderCollection = $this->orderCollectionFactory->create();
-        foreach ($orderCollection as $order) {
-            $transactionCollection = $this->transactionCollectionFactory->create();
-            $orderCurrency = $order->getOrderCurrencyCode();
-
-            $transactionCollection->addFieldToFilter('order_id', $order->getId());
-            foreach ($transactionCollection as $transaction) {
-                $transaction->setData('base_amount', isset($rates[$orderCurrency]) && $rates[$orderCurrency] != 0 ? $transaction->getData('amount')/$rates[$orderCurrency] : null);
-                $transaction->save();
-            }
+                    $transactionCollection->addFieldToFilter('order_id', $order->getId());
+                    foreach ($transactionCollection as $transaction) {
+                        $transaction->setData('base_amount', isset($rates[$orderCurrency]) && $rates[$orderCurrency] != 0 ? $transaction->getData('amount') / $rates[$orderCurrency] : null);
+                        $transaction->save();
+                    }
+                }
+            }, []);
+        } catch (\Throwable $e) {
+            $writer = new \Zend\Log\Writer\Stream(BP . '/var/log/connectpos.log');
+            $logger = new \Zend\Log\Logger();
+            $logger->addWriter($writer);
+            $logger->info('====> Failed to execute command convert base amount');
+            $logger->info($e->getMessage() . "\n" . $e->getTraceAsString());
         }
     }
 }
