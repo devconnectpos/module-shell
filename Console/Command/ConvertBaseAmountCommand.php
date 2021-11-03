@@ -113,11 +113,10 @@ class ConvertBaseAmountCommand extends Command
                 }
             }, []);
         } catch (\Throwable $e) {
-            $writer = new \Zend\Log\Writer\Stream(BP . '/var/log/connectpos.log');
-            $logger = new \Zend\Log\Logger();
-            $logger->addWriter($writer);
-            $logger->info('====> Failed to execute command convert base amount');
-            $logger->info($e->getMessage() . "\n" . $e->getTraceAsString());
+            $objectManager = \Magento\Framework\App\ObjectManager::getInstance();
+            $logger = $objectManager->get('Psr\Log\LoggerInterface');
+            $logger->info("====> [CPOS] Failed to execute command convert base amount: {$e->getMessage()}");
+            $logger->info($e->getTraceAsString());
         }
     }
 }
